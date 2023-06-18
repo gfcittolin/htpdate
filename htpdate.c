@@ -61,7 +61,7 @@
 #include <openssl/ssl.h>
 #endif
 
-#define VERSION                  "1.3.5-gfcittolin.20220807"
+#define VERSION                  "1.3.5-gfcittolin.20230617"
 #define MAX_HTTP_HOSTS           16                /* 16 web servers */
 #define DEFAULT_HTTP_PORT        "80"
 #define DEFAULT_PROXY_PORT       "8080"
@@ -360,17 +360,26 @@ static double getHTTPdate(
             rc = proxyCONNECT(server_s, host, port, proxy, proxyport, httpversion);
             if (rc != 1) {
                 printlog(1, "Proxy error: %i", rc);
+                close(server_s);
+                SSL_CTX_free(tls_ctx);
+                SSL_free(conn);
                 return(ERR_TIMESTAMP);
             }
         }
         if (! SSL_set_fd(conn, server_s)) {
             printlog(1, "TLS error1");
+            close(server_s);
+            SSL_CTX_free(tls_ctx);
+            SSL_free(conn);
             return(ERR_TIMESTAMP);
         } else {
-           if (SSL_connect(conn) != 1) {
-               printlog(1, "TLS error2");
-               return(ERR_TIMESTAMP);
-           }
+            if (SSL_connect(conn) != 1) {
+                printlog(1, "TLS error2");
+                close(server_s);
+                SSL_CTX_free(tls_ctx);
+                SSL_free(conn);
+                return(ERR_TIMESTAMP);
+            }
         }
     }
     #endif
