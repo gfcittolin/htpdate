@@ -1,5 +1,5 @@
 /*
-    htpdate v1.3.5-gfcittolin.20220807
+    htpdate 1.3.5-gfcittolin.techlab.20250829
 
     Eddy Vervest <eddy@vervest.org>
     http://www.vervest.org/htp
@@ -61,7 +61,7 @@
 #include <openssl/ssl.h>
 #endif
 
-#define VERSION                  "1.3.5-gfcittolin.20230617"
+#define VERSION                  "1.3.5-gfcittolin.techlab.20250829"
 #define MAX_HTTP_HOSTS           16                /* 16 web servers */
 #define DEFAULT_HTTP_PORT        "80"
 #define DEFAULT_PROXY_PORT       "8080"
@@ -79,6 +79,8 @@
 #define URLSIZE                  128
 #define BUFFERSIZE               8192
 #define PRINTBUFFERSIZE          BUFFERSIZE
+#define SYNCRONIZED              1
+#define UNSYNCRONIZED            0
 
 #define sign(x) (x < 0 ? (-1) : 1)
 
@@ -477,18 +479,32 @@ static double getHTTPdate(
         return(-first_offset + 1 - when/(double)1e9L);
     }
 }
-
-
-static int setstatus(int precision) {
+/* Syncs or unsyncs flag used by Kernel in 11 minute mode */
+static int setstatus(int synchronized) {
     struct timex txc = {0};
-
-    txc.modes = MOD_STATUS | (1000000 >> precision) | MOD_MAXERROR;
-    txc.status &= ~STA_UNSYNC;
-    printlog(0, "Set clock synchronized");
-
-    return(adjtimex(&txc));
+    /* MOD_STATUS mode to change STA_UNSYNC flag;
+       EST and MAX ERROR modes are not used right now but 
+       they could, in future, when trying to define
+       synchronicity
+    */
+    txc.modes = MOD_STATUS | MOD_ESTERROR | MOD_MAXERROR;
+    if(synchronized) {
+        /* Clears flag */
+        txc.status &= ~STA_UNSYNC;
+        printlog(0, "Setting clock synchronized");
+    } else {
+        /* Sets flag */
+        txc.status |= STA_UNSYNC;
+        printlog(0, "Setting clock unsynchronized");
+    }
+    /* Calling adjtimex(&txc) for changes to take effect. */
+    if (adjtimex(&txc) == -1) {
+        /* -1 means failed to write values */
+        printlog(1, "Failed - adjtimex (write)");
+        return -1;
+    }
+    return 0;
 }
-
 
 static int setclock(double timedelta, int setmode) {
     struct timespec now;
@@ -903,6 +919,9 @@ int main(int argc, char *argv[]) {
         int    validtimes = 0, goodtimes = 0;
         double sumtimes = 0, mean = 0;
 
+        /* Set default sync status to UNSYNCRONIZED */
+        setstatus(UNSYNCRONIZED);
+
         /* Loop through the time sources (web servers); poll cycle */
         for (i = optind; i < argc; i++) {
 
@@ -954,7 +973,9 @@ int main(int argc, char *argv[]) {
             if (sumtimes || !(daemonize || foreground)) {
                 if (setclock(timeavg, setmode) < 0)
                     printlog(1, "Time change failed");
-
+                else 
+                    /* Time settled successfully, change sync flag */
+                    setstatus(SYNCRONIZED);
                 /* Drop root privileges again */
                 if (sw_uid) swuid(sw_uid);
 
@@ -985,9 +1006,11 @@ int main(int argc, char *argv[]) {
                     sleep(DEFAULT_MIN_SLEEP);
                 }
             } else {
+                /* No need to change time, already synced */
+                setstatus(SYNCRONIZED);
+                
                 /* Increase polling interval */
                 if (sleeptime < maxsleep) sleeptime <<= 1;
-                if (setmode == 3) setstatus(precision);
             }
 
             if (daemonize || foreground) {
