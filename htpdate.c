@@ -482,12 +482,8 @@ static double getHTTPdate(
 /* Syncs or unsyncs flag used by Kernel in 11 minute mode */
 static int setstatus(int synchronized) {
     struct timex txc = {0};
-    /* MOD_STATUS mode to change STA_UNSYNC flag;
-       EST and MAX ERROR modes are not used right now but 
-       they could, in future, when trying to define
-       synchronicity
-    */
-    txc.modes = MOD_STATUS | MOD_ESTERROR | MOD_MAXERROR;
+    /* MOD_STATUS mode to change STA_UNSYNC flag */
+    txc.modes = MOD_STATUS;
     if(synchronized) {
         /* Clears flag */
         txc.status &= ~STA_UNSYNC;
