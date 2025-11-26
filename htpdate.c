@@ -1,5 +1,5 @@
 /*
-    htpdate 1.3.5-gfcittolin.techlab.20250829
+    htpdate 1.3.5-gfcittolin.techlab.20251126
 
     Eddy Vervest <eddy@vervest.org>
     http://www.vervest.org/htp
@@ -61,7 +61,7 @@
 #include <openssl/ssl.h>
 #endif
 
-#define VERSION                  "1.3.5-gfcittolin.techlab.20250829"
+#define VERSION                  "1.3.5-gfcittolin.techlab.20251126"
 #define MAX_HTTP_HOSTS           16                /* 16 web servers */
 #define DEFAULT_HTTP_PORT        "80"
 #define DEFAULT_PROXY_PORT       "8080"
@@ -482,8 +482,12 @@ static double getHTTPdate(
 /* Syncs or unsyncs flag used by Kernel in 11 minute mode */
 static int setstatus(int synchronized) {
     struct timex txc = {0};
-    /* MOD_STATUS mode to change STA_UNSYNC flag */
-    txc.modes = MOD_STATUS;
+    /* MOD_STATUS mode to change STA_UNSYNC flag;
+       MOD_ESTERROR and MOD_MAXERROR modes are needed
+       to change flag, because these error values ​​are also 
+       expected to change on a normal NTP call.
+    */
+    txc.modes = MOD_STATUS | MOD_ESTERROR | MOD_MAXERROR;
     if(synchronized) {
         /* Clears flag */
         txc.status &= ~STA_UNSYNC;
